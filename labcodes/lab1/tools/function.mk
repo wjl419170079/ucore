@@ -10,6 +10,12 @@ OBJPREFIX	:= __objs_
 # listf = $(filter %.c %.S, $(wildcard $(1)/*))
 # $(1) is empty, so the listf is empty
 # `wildcard`找到满足pattern的所有文件列表。
+
+# $(addprefix <prefix>,<names...>)
+# $(addsuffix <suffix>,<names...>)
+# $(if <condition>,<then-part>,<else-part>)
+# $(filter <pattern...>,<text>)
+# listf = $(filter $(if c S,$(addprefix %.,c S)),%)
 listf = $(filter $(if $(2),$(addprefix %.,$(2)),%),\
 		  $(wildcard $(addsuffix $(SLASH)*,$(1))))
 
@@ -22,6 +28,7 @@ toobj = $(addprefix $(OBJDIR)$(SLASH)$(if $(2),$(2)$(SLASH)),\
 # 结果为： $(OBJDIR)/$(2)/$(1).d
 todep = $(patsubst %.o,%.d,$(call toobj,$(1),$(2)))
 
+# 增加前缀 bin/
 totarget = $(addprefix $(BINDIR)$(SLASH),$(1))
 
 # change $(name) to $(OBJPREFIX)$(name): (#names)

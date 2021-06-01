@@ -143,9 +143,15 @@ KCFLAGS		+= $(addprefix -I,$(KINCLUDE))
 
 $(call add_files_cc,$(call listf_cc,$(KSRCDIR)),kernel,$(KCFLAGS))
 
+# $(call read_packet,kernel libs)
+# => $(foreach p,$(call packetname,kernel libs),$($(p)))
+# => $(foreach p,$(if kernel libs,$(addprefix __objs_,kernel libs),$(__objs_)),$($(p)))
+# => $(foreach p,__objs_kernel __objs_libs,$($(p)))
+# => __objs_kernel __objs_libs
 KOBJS	= $(call read_packet,kernel libs)
 
 # create kernel target
+# kernel = bin/kernel
 kernel = $(call totarget,kernel)
 
 $(kernel): tools/kernel.ld
@@ -161,16 +167,28 @@ $(call create_target,kernel)
 # -------------------------------------------------------------------
 
 # create bootblock
+# bootfiles = boot/*.c boot/*.S <=> bootfiles = boot/bootmain.c boot/bootasm.S
 bootfiles = $(call listf_cc,boot)
+# $(eval $(call do_cc_compile,$(1),$(2),$(3),$(4)))
+# => $(eval $(call do_cc_compile,boot/bootmain.c,gcc,-Ilibs/ -Os -nostdinc,$(4)))
+# => $$(call cc_template,boot/bootmain.c,gcc,-Ilibs/ -Os -nostdinc,$(4))
 $(foreach f,$(bootfiles),$(call cc_compile,$(f),$(CC),$(CFLAGS) -Os -nostdinc))
 
+# bootblock = bin/bootblock
 bootblock = $(call totarget,bootblock)
 
+# $(bootblock): obj/boot/*.o | bin/sign
 $(bootblock): $(call toobj,$(bootfiles)) | $(call totarget,sign)
 	@echo + ld $@
 	$(V)$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 $^ -o $(call toobj,bootblock)
 	@$(OBJDUMP) -S $(call objfile,bootblock) > $(call asmfile,bootblock)
 	@$(OBJCOPY) -S -O binary $(call objfile,bootblock) $(call outfile,bootblock)
+	# $(call outfile,bootblock)
+	# => $(call cgtype,$(call toobj,bootblock),o,out)
+	# => $(call cgtype,obj/bootblock.o,o,out)
+	# => $(patsubst %.o,%.out,obj/bootblock.o)
+	# => obj/bootblock.out
+	# bin/sign obj/bootblock.out bin/bootblock
 	@$(call totarget,sign) $(call outfile,bootblock) $(bootblock)
 
 $(call create_target,bootblock)
@@ -184,11 +202,27 @@ $(call create_target_host,sign,sign)
 # -------------------------------------------------------------------
 
 # create ucore.img
+# call: 函数调用
+# $(call <expression>,<parm1>,<parm2>,...,<parmn>)
+# UCOREIMG	:= bin/ucore.img
 UCOREIMG	:= $(call totarget,ucore.img)
 
+# $@: 所有的目标的挨个值
 $(UCOREIMG): $(kernel) $(bootblock)
+	# 总结：
+		# 1.创建ucore.img，512*10000bytes
+		# 2.将bootblock写到ucore.img的第一个block
+		# 3.将kernel写入ucore.img(跳过第一个block)
+
+	# dd: Copy a file, converting and formatting according to the operands.
+	# if: input file
+	# of: output file
+	# $@: 目标文件 ucore.img
+	# count: copy blocks count，拷贝的块数量，单块大小512byte
 	$(V)dd if=/dev/zero of=$@ count=10000
+	# conv=notrunc: do not truncate the output file
 	$(V)dd if=$(bootblock) of=$@ conv=notrunc
+	# seek=N skip N obs-sized blocks at start of output
 	$(V)dd if=$(kernel) of=$@ seek=1 conv=notrunc
 
 $(call create_target,ucore.img)
