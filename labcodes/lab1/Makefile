@@ -3,6 +3,7 @@ EMPTY	:=
 SPACE	:= $(EMPTY) $(EMPTY)
 SLASH	:= /
 
+# 控制指令是否回显
 V       := @
 #need llvm/cang-3.5+
 #USELLVM := 1
@@ -49,6 +50,11 @@ endif
 # delete target files if there is an error (or make is interrupted)
 .DELETE_ON_ERROR:
 
+# HOSTCC		:= gcc
+# CC			:= gcc
+# HOSTCFLAGS	:= -g -Wall -O2
+# CFLAGS		:= -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector
+
 # define compiler and flags
 ifndef  USELLVM
 HOSTCC		:= gcc
@@ -66,12 +72,18 @@ endif
 
 CTYPE	:= c S
 
+# linker: 链接器
+# LD	:= ld
 LD      := $(GCCPREFIX)ld
 # The result is `LDFLAGS := -m elf_i386`
 LDFLAGS	:= -m $(shell $(LD) -V | grep elf_i386 2>/dev/null)
+# 不链接标准库
+# LDFLAGS = -m elf_i386 -nostdlib
 LDFLAGS	+= -nostdlib
 
+# OBJCOPY := objcopy
 OBJCOPY := $(GCCPREFIX)objcopy
+# OBJDUMP := objdump
 OBJDUMP := $(GCCPREFIX)objdump
 
 COPY	:= cp
@@ -139,6 +151,8 @@ KSRCDIR		+= kern/init \
 			   kern/trap \
 			   kern/mm
 
+# include dir
+# KCFLAGS = -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/
 KCFLAGS		+= $(addprefix -I,$(KINCLUDE))
 
 $(call add_files_cc,$(call listf_cc,$(KSRCDIR)),kernel,$(KCFLAGS))
@@ -158,6 +172,8 @@ $(kernel): tools/kernel.ld
 
 $(kernel): $(KOBJS)
 	@echo + ld $@
+	# -T scriptfile: use scriptfile as linker script
+	# ld -m    elf_i386 -nostdlib -T tools/kernel.ld -o bin/kernel  obj/kern/init/init.o obj/kern/libs/readline.o obj/kern/libs/stdio.o obj/kern/debug/kdebug.o obj/kern/debug/kmonitor.o obj/kern/debug/panic.o obj/kern/driver/clock.o obj/kern/driver/console.o obj/kern/driver/intr.o obj/kern/driver/picirq.o obj/kern/trap/trap.o obj/kern/trap/trapentry.o obj/kern/trap/vectors.o obj/kern/mm/pmm.o  obj/libs/printfmt.o obj/libs/string.o
 	$(V)$(LD) $(LDFLAGS) -T tools/kernel.ld -o $@ $(KOBJS)
 	@$(OBJDUMP) -S $@ > $(call asmfile,kernel)
 	@$(OBJDUMP) -t $@ | $(SED) '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(call symfile,kernel)
@@ -172,6 +188,8 @@ bootfiles = $(call listf_cc,boot)
 # $(eval $(call do_cc_compile,$(1),$(2),$(3),$(4)))
 # => $(eval $(call do_cc_compile,boot/bootmain.c,gcc,-Ilibs/ -Os -nostdinc,$(4)))
 # => $$(call cc_template,boot/bootmain.c,gcc,-Ilibs/ -Os -nostdinc,$(4))
+# -Os: Optimize for size
+# 编译boot目录下的所有文件
 $(foreach f,$(bootfiles),$(call cc_compile,$(f),$(CC),$(CFLAGS) -Os -nostdinc))
 
 # bootblock = bin/bootblock
@@ -180,8 +198,11 @@ bootblock = $(call totarget,bootblock)
 # $(bootblock): obj/boot/*.o | bin/sign
 $(bootblock): $(call toobj,$(bootfiles)) | $(call totarget,sign)
 	@echo + ld $@
+	# ld -m    elf_i386 -nostdlib -N -e start -Ttext 0x7C00 obj/boot/bootasm.o obj/boot/bootmain.o -o obj/bootblock.o
 	$(V)$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 $^ -o $(call toobj,bootblock)
+	# objdump -S obj/bootblock.o > obj/bootblock.asm
 	@$(OBJDUMP) -S $(call objfile,bootblock) > $(call asmfile,bootblock)
+	# objcopy -S -O binary obj/bootblock.o obj/bootblock.out
 	@$(OBJCOPY) -S -O binary $(call objfile,bootblock) $(call outfile,bootblock)
 	# $(call outfile,bootblock)
 	# => $(call cgtype,$(call toobj,bootblock),o,out)
@@ -191,11 +212,14 @@ $(bootblock): $(call toobj,$(bootfiles)) | $(call totarget,sign)
 	# bin/sign obj/bootblock.out bin/bootblock
 	@$(call totarget,sign) $(call outfile,bootblock) $(bootblock)
 
+# $(call do_create_target,bootblock)
 $(call create_target,bootblock)
 
 # -------------------------------------------------------------------
 
 # create 'sign' tools
+# $(call add_files,tools/sign.c,gcc,-g -Wall -O2,sign,sign)
+# $(eval $(call do_add_files_to_packet,tools/sign.c,gcc,-g -Wall -O2,sign,sign))
 $(call add_files_host,tools/sign.c,sign,sign)
 $(call create_target_host,sign,sign)
 
